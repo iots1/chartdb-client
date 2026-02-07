@@ -1,3 +1,69 @@
+import { Badge } from '@/components/badge/badge';
+import { Button } from '@/components/button/button';
+import { useToast } from '@/components/toast/use-toast';
+import { vertexApi } from '@/lib/vertex-api';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from '@/components/tooltip/tooltip';
+import type { ChartDBEvent } from '@/context/chartdb-context/chartdb-context';
+import { useDiagramFilter } from '@/context/diagram-filter-context/use-diagram-filter';
+import { useDiff } from '@/context/diff-context/use-diff';
+import { useBreakpoint } from '@/hooks/use-breakpoint';
+import { useCanvas } from '@/hooks/use-canvas';
+import { useChartDB } from '@/hooks/use-chartdb';
+import { useLayout } from '@/hooks/use-layout';
+import { useLocalConfig } from '@/hooks/use-local-config';
+import { useTheme } from '@/hooks/use-theme';
+import { areFieldTypesCompatible } from '@/lib/data/data-types/data-types';
+import { defaultSchemas } from '@/lib/data/default-schemas';
+import type { Area } from '@/lib/domain/area';
+import type { DatabaseType } from '@/lib/domain/database-type';
+import type { DBTable } from '@/lib/domain/db-table';
+import { MIN_TABLE_SIZE } from '@/lib/domain/db-table';
+import type { DiagramFilter } from '@/lib/domain/diagram-filter/diagram-filter';
+import { filterTable } from '@/lib/domain/diagram-filter/filter';
+import type { Note } from '@/lib/domain/note';
+import type { Graph } from '@/lib/graph';
+import { removeVertex } from '@/lib/graph';
+import { cn, debounce, getOperatingSystem } from '@/lib/utils';
+import {
+    getTablesInArea,
+    updateTablesParentAreas,
+} from '@/lib/utils/area-utils';
+import type {
+    addEdge,
+    EdgeTypes,
+    NodeChange,
+    NodeDimensionChange,
+    NodePositionChange,
+    NodeRemoveChange,
+    NodeTypes,
+    OnEdgesChange,
+    OnNodesChange,
+} from '@xyflow/react';
+import {
+    Background,
+    BackgroundVariant,
+    Controls,
+    MiniMap,
+    ReactFlow,
+    SelectionMode,
+    useEdgesState,
+    useKeyPress,
+    useNodesState,
+    useReactFlow,
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+import equal from 'fast-deep-equal';
+import {
+    AlertTriangle,
+    EyeOff,
+    Highlighter,
+    Magnet,
+    Pencil,
+} from 'lucide-react';
 import React, {
     useCallback,
     useEffect,
@@ -5,94 +71,45 @@ import React, {
     useRef,
     useState,
 } from 'react';
-import type {
-    addEdge,
-    NodePositionChange,
-    NodeRemoveChange,
-    NodeDimensionChange,
-    OnEdgesChange,
-    OnNodesChange,
-    NodeTypes,
-    EdgeTypes,
-    NodeChange,
-} from '@xyflow/react';
+import { useHotkeys } from 'react-hotkeys-hook';
+import { useTranslation } from 'react-i18next';
+import { useClickAway } from 'react-use';
+import type { AreaNodeType } from './area-node/area-node';
+import { AreaNode } from './area-node/area-node';
+import { CanvasContextMenu } from './canvas-context-menu';
+import { CanvasFilter } from './canvas-filter/canvas-filter';
 import {
-    ReactFlow,
-    useEdgesState,
-    useNodesState,
-    Background,
-    BackgroundVariant,
-    MiniMap,
-    Controls,
-    useReactFlow,
-    useKeyPress,
-    SelectionMode,
-} from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
-import equal from 'fast-deep-equal';
+    calcTableHeight,
+    findOverlappingTables,
+    findTableOverlapping,
+} from './canvas-utils';
+import { ConnectionLine } from './connection-line/connection-line';
+import type { CreateRelationshipNodeType } from './create-relationship-node/create-relationship-node';
+import { CreateRelationshipNode } from './create-relationship-node/create-relationship-node';
+import type { DependencyEdgeType } from './dependency-edge/dependency-edge';
+import { DependencyEdge } from './dependency-edge/dependency-edge';
+import { useIsLostInCanvas } from './hooks/use-is-lost-in-canvas';
+import { MarkerDefinitions } from './marker-definitions';
+import type { NoteNodeType } from './note-node/note-node';
+import { NoteNode } from './note-node/note-node';
+import type { RelationshipEdgeType } from './relationship-edge/relationship-edge';
+import { RelationshipEdge } from './relationship-edge/relationship-edge';
+import { ShowAllButton } from './show-all-button';
 import type { TableNodeType } from './table-node/table-node';
 import {
     TABLE_RELATIONSHIP_SOURCE_HANDLE_ID_PREFIX,
     TABLE_RELATIONSHIP_TARGET_HANDLE_ID_PREFIX,
     TableNode,
 } from './table-node/table-node';
-import type { RelationshipEdgeType } from './relationship-edge/relationship-edge';
-import { RelationshipEdge } from './relationship-edge/relationship-edge';
-import { useChartDB } from '@/hooks/use-chartdb';
-import {
-    LEFT_HANDLE_ID_PREFIX,
-    TARGET_ID_PREFIX,
-} from './table-node/table-node-field';
-import { Toolbar } from './toolbar/toolbar';
-import { useToast } from '@/components/toast/use-toast';
-import {
-    Pencil,
-    Magnet,
-    AlertTriangle,
-    Highlighter,
-    EyeOff,
-} from 'lucide-react';
-import { Button } from '@/components/button/button';
-import { useLayout } from '@/hooks/use-layout';
-import { useBreakpoint } from '@/hooks/use-breakpoint';
-import { Badge } from '@/components/badge/badge';
-import { useTheme } from '@/hooks/use-theme';
-import { useTranslation } from 'react-i18next';
-import type { DBTable } from '@/lib/domain/db-table';
-import { MIN_TABLE_SIZE } from '@/lib/domain/db-table';
-import { useLocalConfig } from '@/hooks/use-local-config';
-import {
-    Tooltip,
-    TooltipTrigger,
-    TooltipContent,
-} from '@/components/tooltip/tooltip';
-import { MarkerDefinitions } from './marker-definitions';
-import { CanvasContextMenu } from './canvas-context-menu';
-import { areFieldTypesCompatible } from '@/lib/data/data-types/data-types';
-import {
-    calcTableHeight,
-    findOverlappingTables,
-    findTableOverlapping,
-} from './canvas-utils';
-import type { Graph } from '@/lib/graph';
-import { removeVertex } from '@/lib/graph';
-import type { ChartDBEvent } from '@/context/chartdb-context/chartdb-context';
-import { cn, debounce, getOperatingSystem } from '@/lib/utils';
-import type { DependencyEdgeType } from './dependency-edge/dependency-edge';
-import { DependencyEdge } from './dependency-edge/dependency-edge';
 import {
     BOTTOM_SOURCE_HANDLE_ID_PREFIX,
     TARGET_DEP_PREFIX,
     TOP_SOURCE_HANDLE_ID_PREFIX,
 } from './table-node/table-node-dependency-indicator';
-import type { DatabaseType } from '@/lib/domain/database-type';
-import { useCanvas } from '@/hooks/use-canvas';
-import type { AreaNodeType } from './area-node/area-node';
-import { AreaNode } from './area-node/area-node';
-import type { Area } from '@/lib/domain/area';
-import type { NoteNodeType } from './note-node/note-node';
-import { NoteNode } from './note-node/note-node';
-import type { Note } from '@/lib/domain/note';
+import {
+    LEFT_HANDLE_ID_PREFIX,
+    TARGET_ID_PREFIX,
+} from './table-node/table-node-field';
 import type { TempCursorNodeType } from './temp-cursor-node/temp-cursor-node';
 import {
     TEMP_CURSOR_HANDLE_ID,
@@ -104,23 +121,7 @@ import {
     TEMP_FLOATING_EDGE_ID,
     TempFloatingEdge,
 } from './temp-floating-edge/temp-floating-edge';
-import type { CreateRelationshipNodeType } from './create-relationship-node/create-relationship-node';
-import { CreateRelationshipNode } from './create-relationship-node/create-relationship-node';
-import { ConnectionLine } from './connection-line/connection-line';
-import {
-    updateTablesParentAreas,
-    getTablesInArea,
-} from '@/lib/utils/area-utils';
-import { CanvasFilter } from './canvas-filter/canvas-filter';
-import { useHotkeys } from 'react-hotkeys-hook';
-import { ShowAllButton } from './show-all-button';
-import { useIsLostInCanvas } from './hooks/use-is-lost-in-canvas';
-import type { DiagramFilter } from '@/lib/domain/diagram-filter/diagram-filter';
-import { useDiagramFilter } from '@/context/diagram-filter-context/use-diagram-filter';
-import { filterTable } from '@/lib/domain/diagram-filter/filter';
-import { defaultSchemas } from '@/lib/data/default-schemas';
-import { useDiff } from '@/context/diff-context/use-diff';
-import { useClickAway } from 'react-use';
+import { Toolbar } from './toolbar/toolbar';
 
 const HIGHLIGHTED_EDGE_Z_INDEX = 1;
 const DEFAULT_EDGE_Z_INDEX = 0;
@@ -294,11 +295,13 @@ export const Canvas: React.FC<CanvasProps> = ({ initialTables }) => {
         dependencies,
         readonly,
         removeArea,
-        updateArea,
         removeNote,
-        updateNote,
         highlightedCustomType,
         highlightCustomTypeId,
+        diagramId,
+        diagramName,
+        customTypes,
+        currentDiagram,
     } = useChartDB();
     const { showSidePanel } = useLayout();
     const { effectiveTheme } = useTheme();
@@ -660,6 +663,13 @@ export const Canvas: React.FC<CanvasProps> = ({ initialTables }) => {
 
     const prevFilter = useRef<DiagramFilter | undefined>(undefined);
     const prevShowDBViews = useRef<boolean>(showDBViews);
+
+    // Timeout ref for debouncing diagram save
+    const saveDiagramTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Trigger counter to force save when areas/notes positions change
+    const [saveTrigger, setSaveTrigger] = useState(0);
+
     useEffect(() => {
         if (
             !equal(filter, prevFilter.current) ||
@@ -919,6 +929,141 @@ export const Canvas: React.FC<CanvasProps> = ({ initialTables }) => {
         200
     );
 
+    // Debounced diagram save - watches state changes and saves to API
+    useEffect(() => {
+        // Log which dependency changed to trigger this effect
+        console.log('🔄 useEffect triggered - dependencies changed', {
+            saveTrigger,
+            tablesCount: tables.length,
+            areasCount: areas.length,
+            notesCount: notes.length,
+            relationshipsCount: relationships.length,
+        });
+
+        // Skip if no diagram ID or empty diagram
+        if (!diagramId || !currentDiagram) {
+            console.log('⏭️ Skipping save - no diagram ID or current diagram');
+            return;
+        }
+
+        // Clear existing timeout
+        if (saveDiagramTimeoutRef.current) {
+            console.log('⏱️ Clearing existing timeout');
+            clearTimeout(saveDiagramTimeoutRef.current);
+        }
+
+        // Set new timeout to save after 500ms of no changes
+        console.log('⏲️ Setting new 500ms timeout for API save');
+        saveDiagramTimeoutRef.current = setTimeout(async () => {
+            console.log('💾 API SAVE STARTING - timeout completed');
+            try {
+                // Sync positions from React Flow nodes back to diagram data
+                const updatedTables = tables.map((table) => {
+                    const node = getNode(table.id);
+                    if (node?.position) {
+                        return {
+                            ...table,
+                            x: node.position.x,
+                            y: node.position.y,
+                            ...(node.measured?.width
+                                ? { width: node.measured.width }
+                                : {}),
+                        };
+                    }
+                    return table;
+                });
+
+                const updatedAreas = areas.map((area) => {
+                    const node = getNode(area.id);
+                    if (node?.position) {
+                        return {
+                            ...area,
+                            x: node.position.x,
+                            y: node.position.y,
+                            ...(node.measured?.width && node.measured?.height
+                                ? {
+                                      width: node.measured.width,
+                                      height: node.measured.height,
+                                  }
+                                : {}),
+                        };
+                    }
+                    return area;
+                });
+
+                const updatedNotes = notes.map((note) => {
+                    const node = getNode(note.id);
+                    if (node?.position) {
+                        return {
+                            ...note,
+                            x: node.position.x,
+                            y: node.position.y,
+                            ...(node.measured?.width && node.measured?.height
+                                ? {
+                                      width: node.measured.width,
+                                      height: node.measured.height,
+                                  }
+                                : {}),
+                        };
+                    }
+                    return note;
+                });
+
+                const diagramToSave = {
+                    id: diagramId,
+                    name: diagramName,
+                    content: {
+                        tables: updatedTables,
+                        relationships,
+                        dependencies,
+                        areas: updatedAreas,
+                        notes: updatedNotes,
+                        customTypes,
+                        databaseType,
+                        databaseEdition: currentDiagram.databaseEdition,
+                    },
+                    created_at: currentDiagram.createdAt.toISOString(),
+                    updated_at: new Date().toISOString(),
+                };
+
+                console.log('📤 Saving diagram with ONE API call', {
+                    tables: updatedTables.length,
+                    areas: updatedAreas.length,
+                    notes: updatedNotes.length,
+                });
+
+                await vertexApi.saveDiagram(diagramToSave);
+                console.log('✅ API SAVE COMPLETED successfully');
+            } catch (error) {
+                console.error('❌ Failed to save diagram:', error);
+            }
+        }, 500);
+
+        // Cleanup on unmount
+        return () => {
+            if (saveDiagramTimeoutRef.current) {
+                clearTimeout(saveDiagramTimeoutRef.current);
+            }
+        };
+    }, [
+        // NOTE: Removed 'nodes' from dependencies to prevent triggering on every mouse movement
+        // Instead, we trigger saves when:
+        // - tables state changes (updated by onNodesChangeHandler)
+        // - saveTrigger increments (when areas/notes positions change)
+        saveTrigger,
+        tables,
+        areas,
+        notes,
+        relationships,
+        dependencies,
+        customTypes,
+        diagramId,
+        diagramName,
+        databaseType,
+        currentDiagram,
+        getNode,
+    ]);
+
     const findRelevantNodesChanges = useCallback(
         (changes: NodeChange<NodeType>[], type: NodeType['type']) => {
             const relevantChanges = changes.filter((change) => {
@@ -977,6 +1122,17 @@ export const Canvas: React.FC<CanvasProps> = ({ initialTables }) => {
 
     const onNodesChangeHandler: OnNodesChange<NodeType> = useCallback(
         (changes) => {
+            // Debug: Log position changes during drag
+            const posChanges = changes.filter((c) => c.type === 'position');
+            if (posChanges.length > 0) {
+                const isDragging = posChanges.some(
+                    (c) => (c as NodePositionChange).dragging
+                );
+                console.log(
+                    `🖱️ onNodesChange - ${posChanges.length} position changes, dragging: ${isDragging}`
+                );
+            }
+
             let changesToApply = changes;
 
             if (readonly) {
@@ -985,7 +1141,7 @@ export const Canvas: React.FC<CanvasProps> = ({ initialTables }) => {
                 );
             }
 
-            // Handle area drag changes - add child table movements for visual feedback only
+            // Handle area drag changes - add child table movements for visual feedback
             const areaDragChanges = changesToApply.filter((change) => {
                 if (change.type === 'position') {
                     const node = getNode(change.id);
@@ -1029,21 +1185,21 @@ export const Canvas: React.FC<CanvasProps> = ({ initialTables }) => {
                 changesToApply = [...changesToApply, ...additionalChanges];
             }
 
-            // First, detect area changes
+            // Detect area changes
             const {
                 positionChanges: areaPositionChanges,
                 removeChanges: areaRemoveChanges,
                 sizeChanges: areaSizeChanges,
             } = findRelevantNodesChanges(changesToApply, 'area');
 
-            // Then, detect note changes
+            // Detect note changes
             const {
                 positionChanges: notePositionChanges,
                 removeChanges: noteRemoveChanges,
                 sizeChanges: noteSizeChanges,
             } = findRelevantNodesChanges(changesToApply, 'note');
 
-            // Then, detect table changes
+            // Detect table changes
             const { positionChanges, removeChanges, sizeChanges } =
                 findRelevantNodesChanges(changesToApply, 'table');
 
@@ -1080,14 +1236,57 @@ export const Canvas: React.FC<CanvasProps> = ({ initialTables }) => {
                 });
             }
 
-            // Apply all table updates in a single call
+            // Update tables state immediately to prevent position from reverting
+            // Use skipPersist: true to update React state WITHOUT triggering API calls
+            // The useEffect will handle the actual API save with proper debouncing
             if (
                 positionChanges.length > 0 ||
-                removeChanges.length > 0 ||
                 sizeChanges.length > 0 ||
-                childTableMovements.size > 0 ||
-                areaRemoveChanges.length > 0
+                childTableMovements.size > 0
             ) {
+                console.log(
+                    '📍 Table position/size changed - updating state (skipPersist)'
+                );
+
+                updateTablesState(
+                    (currentTables) => {
+                        return currentTables.map((table) => {
+                            const node = getNode(table.id);
+                            if (node?.position) {
+                                // Return updated position from React Flow
+                                return {
+                                    id: table.id,
+                                    x: node.position.x,
+                                    y: node.position.y,
+                                    ...(node.measured?.width
+                                        ? { width: node.measured.width }
+                                        : {}),
+                                };
+                            }
+                            return { id: table.id }; // No change
+                        });
+                    },
+                    { updateHistory: false, skipPersist: true }
+                );
+
+                // Trigger debounced save via useEffect
+                setSaveTrigger((prev) => prev + 1);
+            }
+
+            // Areas and notes positions are handled by React Flow and will be saved via useEffect
+            // Trigger save when area/note positions change (dragging ended)
+            if (
+                areaPositionChanges.length > 0 ||
+                areaSizeChanges.length > 0 ||
+                notePositionChanges.length > 0 ||
+                noteSizeChanges.length > 0
+            ) {
+                console.log('📍 Area/Note position changed - triggering save');
+                setSaveTrigger((prev) => prev + 1);
+            }
+
+            // Handle removals immediately
+            if (removeChanges.length > 0 || areaRemoveChanges.length > 0) {
                 updateTablesState(
                     (currentTables) => {
                         const updatedTables = currentTables
@@ -1103,60 +1302,6 @@ export const Canvas: React.FC<CanvasProps> = ({ initialTables }) => {
                                         parentAreaId: null,
                                     };
                                 }
-
-                                // Handle direct table changes
-                                const positionChange = positionChanges.find(
-                                    (change) => change.id === currentTable.id
-                                );
-                                const sizeChange = sizeChanges.find(
-                                    (change) => change.id === currentTable.id
-                                );
-
-                                // Handle child table movement from area drag
-                                const areaMovement = childTableMovements.get(
-                                    currentTable.id
-                                );
-
-                                if (
-                                    positionChange ||
-                                    sizeChange ||
-                                    areaMovement
-                                ) {
-                                    const x = positionChange?.position?.x;
-                                    const y = positionChange?.position?.y;
-
-                                    return {
-                                        ...currentTable,
-                                        ...(positionChange &&
-                                        x !== undefined &&
-                                        y !== undefined &&
-                                        !isNaN(x) &&
-                                        !isNaN(y)
-                                            ? {
-                                                  x,
-                                                  y,
-                                              }
-                                            : {}),
-                                        ...(areaMovement && !positionChange
-                                            ? {
-                                                  x:
-                                                      currentTable.x +
-                                                      areaMovement.deltaX,
-                                                  y:
-                                                      currentTable.y +
-                                                      areaMovement.deltaY,
-                                              }
-                                            : {}),
-                                        ...(sizeChange
-                                            ? {
-                                                  width:
-                                                      sizeChange.dimensions
-                                                          ?.width ??
-                                                      currentTable.width,
-                                              }
-                                            : {}),
-                                    };
-                                }
                                 return currentTable;
                             })
                             .filter(
@@ -1169,104 +1314,30 @@ export const Canvas: React.FC<CanvasProps> = ({ initialTables }) => {
                         return updatedTables;
                     },
                     {
-                        updateHistory:
-                            positionChanges.length > 0 ||
-                            removeChanges.length > 0 ||
-                            sizeChanges.length > 0,
+                        updateHistory: removeChanges.length > 0,
                     }
                 );
             }
 
+            if (areaRemoveChanges.length > 0) {
+                areaRemoveChanges.forEach((change) => {
+                    removeArea(change.id);
+                });
+            }
+
+            if (noteRemoveChanges.length > 0) {
+                noteRemoveChanges.forEach((change) => {
+                    removeNote(change.id);
+                });
+            }
+
+            // Update overlapping graph for visual feedback
             updateOverlappingGraphOnChangesDebounced({
                 positionChanges,
                 sizeChanges,
             });
 
-            if (
-                areaPositionChanges.length > 0 ||
-                areaRemoveChanges.length > 0 ||
-                areaSizeChanges.length > 0
-            ) {
-                const areasUpdates: Record<string, Partial<Area>> = {};
-                // Handle area position changes (child tables already moved above)
-                areaPositionChanges.forEach((change) => {
-                    if (change.type === 'position' && change.position) {
-                        areasUpdates[change.id] = {
-                            ...areasUpdates[change.id],
-                            x: change.position.x,
-                            y: change.position.y,
-                        };
-                    }
-                });
-
-                // Handle area size changes
-                areaSizeChanges.forEach((change) => {
-                    if (change.type === 'dimensions' && change.dimensions) {
-                        areasUpdates[change.id] = {
-                            ...areasUpdates[change.id],
-                            width: change.dimensions.width,
-                            height: change.dimensions.height,
-                        };
-                    }
-                });
-
-                // Handle area removal (child tables parentAreaId already cleared above)
-                areaRemoveChanges.forEach((change) => {
-                    removeArea(change.id);
-                    delete areasUpdates[change.id];
-                });
-
-                // Apply area updates to storage
-                if (Object.keys(areasUpdates).length > 0) {
-                    for (const [id, updates] of Object.entries(areasUpdates)) {
-                        updateArea(id, updates);
-                    }
-                }
-            }
-
-            // Handle note changes
-            if (
-                notePositionChanges.length > 0 ||
-                noteRemoveChanges.length > 0 ||
-                noteSizeChanges.length > 0
-            ) {
-                const notesUpdates: Record<string, Partial<Note>> = {};
-                // Handle note position changes
-                notePositionChanges.forEach((change) => {
-                    if (change.type === 'position' && change.position) {
-                        notesUpdates[change.id] = {
-                            ...notesUpdates[change.id],
-                            x: change.position.x,
-                            y: change.position.y,
-                        };
-                    }
-                });
-
-                // Handle note size changes
-                noteSizeChanges.forEach((change) => {
-                    if (change.type === 'dimensions' && change.dimensions) {
-                        notesUpdates[change.id] = {
-                            ...notesUpdates[change.id],
-                            width: change.dimensions.width,
-                            height: change.dimensions.height,
-                        };
-                    }
-                });
-
-                // Handle note removal
-                noteRemoveChanges.forEach((change) => {
-                    removeNote(change.id);
-                    delete notesUpdates[change.id];
-                });
-
-                // Apply note updates to storage
-                if (Object.keys(notesUpdates).length > 0) {
-                    for (const [id, updates] of Object.entries(notesUpdates)) {
-                        updateNote(id, updates);
-                    }
-                }
-            }
-
+            // Let React Flow handle visual updates
             return onNodesChange(changesToApply);
         },
         [
@@ -1274,14 +1345,13 @@ export const Canvas: React.FC<CanvasProps> = ({ initialTables }) => {
             updateTablesState,
             updateOverlappingGraphOnChangesDebounced,
             findRelevantNodesChanges,
-            updateArea,
             removeArea,
-            updateNote,
             removeNote,
             readonly,
             tables,
             areas,
             getNode,
+            setSaveTrigger,
         ]
     );
 

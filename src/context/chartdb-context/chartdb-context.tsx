@@ -132,7 +132,11 @@ export interface ChartDBContext {
     ) => Promise<void>;
     updateTablesState: (
         updateFn: (tables: DBTable[]) => PartialExcept<DBTable, 'id'>[],
-        options?: { updateHistory: boolean; forceOverride?: boolean }
+        options?: {
+            updateHistory: boolean;
+            forceOverride?: boolean;
+            skipPersist?: boolean;
+        }
     ) => Promise<void>;
 
     // Field operations

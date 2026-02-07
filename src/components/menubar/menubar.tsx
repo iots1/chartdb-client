@@ -1,14 +1,15 @@
-import React from 'react';
 import {
     CheckIcon,
     ChevronRightIcon,
     DotFilledIcon,
 } from '@radix-ui/react-icons';
 import * as MenubarPrimitive from '@radix-ui/react-menubar';
+import React from 'react';
 
 import { cn } from '@/lib/utils';
 
-const MenubarMenu = MenubarPrimitive.Menu;
+const MenubarMenu: React.FC<MenubarPrimitive.MenubarMenuProps> =
+    MenubarPrimitive.Menu;
 
 const MenubarGroup = MenubarPrimitive.Group;
 
@@ -226,19 +227,19 @@ MenubarShortcut.displayname = 'MenubarShortcut';
 
 export {
     Menubar,
-    MenubarMenu,
-    MenubarTrigger,
-    MenubarContent,
-    MenubarItem,
-    MenubarSeparator,
-    MenubarLabel,
     MenubarCheckboxItem,
+    MenubarContent,
+    MenubarGroup,
+    MenubarItem,
+    MenubarLabel,
+    MenubarMenu,
+    MenubarPortal,
     MenubarRadioGroup,
     MenubarRadioItem,
-    MenubarPortal,
+    MenubarSeparator,
+    MenubarShortcut,
+    MenubarSub,
     MenubarSubContent,
     MenubarSubTrigger,
-    MenubarGroup,
-    MenubarSub,
-    MenubarShortcut,
+    MenubarTrigger,
 };

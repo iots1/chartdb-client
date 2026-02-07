@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+    frontend:
+        build:
+            context: .
+            dockerfile: Dockerfile
+            args:
+                VITE_VERTEX_API_URL: http://your_ip:8082/api
+                
+                VITE_OPENAI_API_KEY: ''
+                VITE_OPENAI_API_ENDPOINT: ''
+                VITE_LLM_MODEL_NAME: ''
+                VITE_HIDE_CHARTDB_CLOUD: 'true'
+                VITE_DISABLE_ANALYTICS: 'true'
+
+        container_name: vertex_frontend
+        restart: always
+        ports:
+            # Map Port 8083 (Host) เข้าไปที่ Port 80 (Container Nginx)
+            - '8083:80' 
+
+        networks:
+            - mongodb-sandbox-net
+
+networks:
+    mongodb-sandbox-net:
+        external: true

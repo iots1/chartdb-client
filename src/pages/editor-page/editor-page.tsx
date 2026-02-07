@@ -7,7 +7,7 @@ import { useLocalConfig } from '@/hooks/use-local-config';
 import { FullScreenLoaderProvider } from '@/context/full-screen-spinner-context/full-screen-spinner-provider';
 import { LayoutProvider } from '@/context/layout-context/layout-provider';
 import { LocalConfigProvider } from '@/context/local-config-context/local-config-provider';
-import { StorageProvider } from '@/context/storage-context/storage-provider';
+import { ApiStorageProvider } from '@/context/storage-context/api-storage-provider';
 import { ConfigProvider } from '@/context/config-context/config-provider';
 import { RedoUndoStackProvider } from '@/context/history-context/redo-undo-stack-provider';
 import { ChartDBProvider } from '@/context/chartdb-context/chartdb-provider';
@@ -116,7 +116,7 @@ export const EditorPage: React.FC = () => (
         <ThemeProvider>
             <FullScreenLoaderProvider>
                 <LayoutProvider>
-                    <StorageProvider>
+                    <ApiStorageProvider>
                         <ConfigProvider>
                             <RedoUndoStackProvider>
                                 <DiffProvider>
@@ -142,7 +142,7 @@ export const EditorPage: React.FC = () => (
                                 </DiffProvider>
                             </RedoUndoStackProvider>
                         </ConfigProvider>
-                    </StorageProvider>
+                    </ApiStorageProvider>
                 </LayoutProvider>
             </FullScreenLoaderProvider>
         </ThemeProvider>

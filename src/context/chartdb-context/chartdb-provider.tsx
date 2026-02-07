@@ -515,7 +515,11 @@ export const ChartDBProvider: React.FC<
     const updateTablesState: ChartDBContext['updateTablesState'] = useCallback(
         async (
             updateFn: (tables: DBTable[]) => PartialExcept<DBTable, 'id'>[],
-            options = { updateHistory: true, forceOverride: false }
+            options = {
+                updateHistory: true,
+                forceOverride: false,
+                skipPersist: false,
+            }
         ) => {
             const updateTables = (prevTables: DBTable[]) => {
                 const updatedTables = updateFn(prevTables);
@@ -585,39 +589,49 @@ export const ChartDBProvider: React.FC<
                 data: { tableIds: tablesToDelete.map((t) => t.id) },
             });
 
-            const promises = [];
-            for (const updatedTable of updatedTables) {
+            // Skip database persistence if skipPersist option is true
+            // This allows updating React state without triggering API calls
+            if (!options.skipPersist) {
+                const promises = [];
+                for (const updatedTable of updatedTables) {
+                    promises.push(
+                        db.putTable({
+                            diagramId,
+                            table: updatedTable,
+                        })
+                    );
+                }
+
+                for (const table of tablesToDelete) {
+                    promises.push(db.deleteTable({ diagramId, id: table.id }));
+                }
+
+                for (const relationship of relationshipsToRemove) {
+                    promises.push(
+                        db.deleteRelationship({
+                            diagramId,
+                            id: relationship.id,
+                        })
+                    );
+                }
+
+                for (const dependency of dependenciesToRemove) {
+                    promises.push(
+                        db.deleteDependency({ diagramId, id: dependency.id })
+                    );
+                }
+
+                const updatedAt = new Date();
+                setDiagramUpdatedAt(updatedAt);
                 promises.push(
-                    db.putTable({
-                        diagramId,
-                        table: updatedTable,
+                    db.updateDiagram({
+                        id: diagramId,
+                        attributes: { updatedAt },
                     })
                 );
+
+                await Promise.all(promises);
             }
-
-            for (const table of tablesToDelete) {
-                promises.push(db.deleteTable({ diagramId, id: table.id }));
-            }
-
-            for (const relationship of relationshipsToRemove) {
-                promises.push(
-                    db.deleteRelationship({ diagramId, id: relationship.id })
-                );
-            }
-
-            for (const dependency of dependenciesToRemove) {
-                promises.push(
-                    db.deleteDependency({ diagramId, id: dependency.id })
-                );
-            }
-
-            const updatedAt = new Date();
-            setDiagramUpdatedAt(updatedAt);
-            promises.push(
-                db.updateDiagram({ id: diagramId, attributes: { updatedAt } })
-            );
-
-            await Promise.all(promises);
 
             if (options.updateHistory) {
                 addUndoAction({

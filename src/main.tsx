@@ -6,10 +6,13 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import './globals.css';
 import { App } from './app';
+import { MigrationWrapper } from './context/migration-context/migration-wrapper';
 import './i18n/i18n';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
-        <App />
+        <MigrationWrapper>
+            <App />
+        </MigrationWrapper>
     </React.StrictMode>
 );
